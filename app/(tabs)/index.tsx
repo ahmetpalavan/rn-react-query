@@ -1,12 +1,17 @@
-import { ActivityIndicator, Button, FlatList, ListRenderItem, StyleSheet, TextInput, Touchable, TouchableOpacity } from "react-native";
-
-import { Text, View } from "../../components/Themed";
-import { Todo, getTodos } from "../../api/todos";
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { ActivityIndicator, FlatList, ListRenderItem, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { Todo, createTodos, deleteTodos, getTodoById, getTodos, updateTodos } from "@/api/todos";
+import TodoItem from "@/components/TodoItem";
+import reactotron from "reactotron-react-native";
+
+if (__DEV__) {
+  import("@/utils/reactotron").then(() => console.log("Reactotron Configured"));
+}
 
 export default function TabOneScreen() {
+  const queryClient = useQueryClient();
   const [todos, setTodos] = useState("");
   const todosQuery = useQuery({
     queryKey: ["todos"],
@@ -14,48 +19,88 @@ export default function TabOneScreen() {
   });
 
   useEffect(() => {
-    todosQuery.refetch();
-    console.log("🚀 ~ file: index.tsx:16 ~ useEffect ~ todosQuery:", todosQuery.data);
-  }, []);
+    reactotron.log ? "useEffect" : null;
+    queryClient.prefetchQuery({
+      queryKey: ["todos"],
+      queryFn: () => getTodoById(1),
+    });
+  }, [queryClient]);
+
+  const addMutation = useMutation({
+    mutationKey: ["addTodo"],
+    mutationFn: createTodos,
+    onSuccess(data) {
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          return query.queryKey[0] === "todos";
+        },
+      });
+      console.log("onSuccess", data);
+    },
+  });
+
+  const addTodo = () => {
+    addMutation.mutate(todos);
+    setTodos("");
+  };
+
+  const deleteMutation = useMutation({
+    mutationKey: ["deleteTodo"],
+    mutationFn: deleteTodos,
+    onSuccess(data) {
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          return query.queryKey[0] === "todos";
+        },
+      });
+      console.log("onSuccess", data);
+    },
+  });
+
+  const updateQueryClient = (updatedTodo: Todo) => {
+    queryClient.setQueryData<Todo[]>(["todos"], (old) => {
+      return old?.map((todo: Todo) => {
+        if (todo.id === updatedTodo.id) {
+          return updatedTodo;
+        }
+        return todo;
+      });
+    });
+  };
+
+  const updateMutation = useMutation({
+    mutationKey: ["updateTodo"],
+    mutationFn: updateTodos,
+    onSuccess(data) {
+      updateQueryClient(data);
+      console.log("onSuccess", data);
+    },
+  });
 
   const renderTodo: ListRenderItem<Todo> = ({ item }) => {
-    const deleteTodo = () => {};
-    const updateTodo = () => {};
-    return (
-      <View
-        style={{
-          flex: 1,
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          margin: 5,
-          padding: 10,
-          gap: 10,
-          marginVertical: 10,
-        }}
-      >
-        <TouchableOpacity onPress={() => {}}>
-          {item.done ? (
-            <Ionicons name="checkmark-circle" size={24} color="green" />
-          ) : (
-            <Ionicons name="checkmark-circle-outline" size={24} color="black" />
-          )}
-          <Text>{item.text}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={deleteTodo} style={{ marginLeft: 10 }}>
-          <Ionicons name="trash" size={24} color="red" />
-        </TouchableOpacity>
-      </View>
-    );
+    const deleteTodo = () => {
+      deleteMutation.mutate(item.id);
+    };
+    const updateTodo = () => {
+      updateMutation.mutate({ ...item, done: !item.done });
+    };
+    return <TodoItem item={item} onDelete={deleteTodo} onUpdate={updateTodo} />;
   };
 
   return (
     <View style={styles.container}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <TextInput placeholder="New Todo" onChangeText={setTodos} value={todos} />
-        <Button title="Add Todo" onPress={() => {}} />
+        <TextInput
+          placeholder="New Todo"
+          value={todos}
+          onChangeText={(text) => setTodos(text)}
+          style={{ padding: 10, borderWidth: 1, borderColor: "black", borderRadius: 10, flex: 1, marginRight: 10 }}
+        />
+        <TouchableOpacity onPress={addTodo}>
+          <Ionicons name="add-circle" size={24} color="black" />
+        </TouchableOpacity>
       </View>
-      {todosQuery.isLoading ? <ActivityIndicator size={"large"} /> : null}
+      {todosQuery.isLoading ? <ActivityIndicator size={"small"} color="red" /> : null}
       {todosQuery.isError ? <Text>Error</Text> : null}
       <FlatList data={todosQuery.data} renderItem={renderTodo} keyExtractor={(item) => item.id.toString()} />
     </View>

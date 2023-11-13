@@ -12,3 +12,34 @@ export const getTodos = async (): Promise<Todo[]> => {
   const response = await fetch(`${API_URL}/todos`);
   return response.json();
 };
+
+export const createTodos = async (text: string): Promise<Todo> => {
+  const todo = { text, done: true };
+  const response = await fetch(`${API_URL}/todos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(todo),
+  });
+  return response.json();
+};
+
+export const updateTodos = async (todo: Todo): Promise<Todo> => {
+  const response = await fetch(`${API_URL}/todos/${todo.id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(todo),
+  });
+  return response.json();
+};
+
+export const deleteTodos = async (id: number): Promise<void> => {
+  const response = await fetch(`${API_URL}/todos/${id}`, {
+    method: "DELETE",
+  });
+  return response.json();
+}
+
+export const getTodoById = async (id: number): Promise<Todo> => {
+  const response = await fetch(`${API_URL}/todos/${id}`);
+  return response.json();
+}
